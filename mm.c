@@ -46,6 +46,7 @@ team_t team = {
 };
 
 //#define MM_CHECK
+//#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -211,7 +212,7 @@ void *mm_append(size_t newsize)
  */
 void *mm_malloc(size_t size)
 {
-#ifdef MM_CHECK
+#ifdef VERBOSE
 	printf("\nmm_malloc(%#x)\n", size);
 #endif
 
@@ -227,6 +228,7 @@ void *mm_malloc(size_t size)
 	if(found == NULL)
 		return NULL;
 
+	void *prev = PREV(found);
 	mm_remove(found);
 
 	size_t tail_size = BLK_SIZE(found) - newsize;
@@ -237,8 +239,9 @@ void *mm_malloc(size_t size)
 		mm_setbounds(found, PACK(newsize, 0x1));
 
 		void *tail = LIN_NEXT(found);
-		mm_setbounds(tail, PACK(tail_size, 0x1));
-		mm_free(PAYLOADP(tail)); // Free the tail block as if it were allocated normally
+		mm_setbounds(tail, PACK(tail_size, 0x0));
+		
+		mm_insert(prev, tail);
 	}
 
 #ifdef MM_CHECK
@@ -253,7 +256,7 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
-#ifdef MM_CHECK
+#ifdef VERBOSE
 	printf("\nmm_free(%#08x)\n", ptr);
 #endif
 
@@ -294,9 +297,12 @@ void *mm_realloc(void *ptr, size_t size)
 int mm_check(void)
 {
 	void *blkp;
+
+#ifdef VERBOSE
 	printf("\n");
 	for(blkp = mm_root; blkp < mem_heap_hi() + 1; blkp = LIN_NEXT(blkp))
 		printf("%#08x %s NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, (BLK_ALLOC(blkp) & 0x1) ? "ALLOC:" : " FREE:", NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
+#endif
 
 	blkp = mm_root;
 	size_t sum = 0;
@@ -326,12 +332,12 @@ int mm_check(void)
 			printf("%#x in the free list is marked as allocated.\n", blkp);
 			return 0;
 		}
-		if((&PREV(blkp) > mem_heap_hi() || &PREV(blkp) < mem_heap_lo()) && &PREV(blkp) != NULL)
+		if((PREV(blkp) > mem_heap_hi() || PREV(blkp) < mem_heap_lo()) && PREV(blkp) != NULL)
 		{
 			printf("%#x points to a PREV not in the heap.\n", blkp);
 			return 0;
 		}
-		if((&NEXT(blkp) > mem_heap_hi() || &NEXT(blkp) < mem_heap_lo()) && &NEXT(blkp) != NULL)
+		if((NEXT(blkp) > mem_heap_hi() || NEXT(blkp) < mem_heap_lo()) && NEXT(blkp) != NULL)
 		{
 			printf("%#x points to a NEXT not in the heap.\n", blkp);
 			return 0;
