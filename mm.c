@@ -99,26 +99,24 @@ static void mm_setbounds(void *blkp, size_t value)
  * mm_remove - For a consistent stack, this removes a FREE block from the chain
  *     Behavior is undefined for non FREE blocks
  */
-static void *mm_remove(void *blkp)
+static void mm_remove(void *blkp)
 {
 	NEXT(PREV(blkp)) = NEXT(blkp);
 	if(NEXT(blkp) != NULL)
 		PREV(NEXT(blkp)) = PREV(blkp);
-	return NEXT(blkp);
 }
 
 /*
- * mm_remove - Inserts a FREE block after the root
+ * mm_insert - Inserts a FREE block in place of a specified non NULL block
  *     Behavior is undefined for non FREE blocks
- *     Returns a pointer to the block now in the same position
  */
 static void mm_insert(void *dest, void *blkp)
 {
-	NEXT(blkp) = NEXT(dest);
-	if(NEXT(blkp) != NULL)
-		PREV(NEXT(blkp)) = blkp;
-	NEXT(dest) = blkp;
 	PREV(blkp) = dest;
+	NEXT(blkp) = NEXT(dest);
+	if(NEXT(dest) != NULL)
+		PREV(NEXT(dest)) = blkp;
+	NEXT(dest) = blkp;
 }
 
 static void **mm_coalesce(void *ptr)
@@ -148,11 +146,10 @@ static void **mm_coalesce(void *ptr)
 int mm_init(void)
 {
 	// Set up the root block.
-	size_t size = ALIGN(SIZE_T_SIZE*2 + PTR_SIZE*2);
-	mm_root = mem_sbrk(size);
-	if(mm_root == NULL)
+	mm_root = mem_sbrk(MIN_BLK_SIZE);
+	if(mm_root == (void *)-1)
 		return -1;
-	mm_setbounds(mm_root, PACK(size, 0x2));
+	mm_setbounds(mm_root, PACK(MIN_BLK_SIZE, 0x2));
 	NEXT(mm_root) = NULL;
 	PREV(mm_root) = NULL;
 
