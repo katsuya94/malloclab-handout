@@ -78,10 +78,14 @@ team_t team = {
 #define LIN_NEXT(bp) ((void *)((char *)bp + BLK_SIZE(bp)))
 #define LIN_PREV(bp) ((void *)((char *)bp - (*((size_t *)((char *)bp - SIZE_T_SIZE)) & ~0x3)))
 
+#define NUM_CLASSES (sizeof(size_t)*8-5)
+#define CLASS_SIZE(n) (0x20*(1 << n))
+
 /* globals
  * mm_root - Pointer to the root block, located at the bottom of the heap
  */
 void *mm_root;
+void **mm_class;
 
 int mm_check(void);
 
@@ -146,6 +150,12 @@ static void **mm_coalesce(void *ptr)
  */
 int mm_init(void)
 {
+	// Set up the size classes
+	mm_class = mem_sbrk(ALIGN(NUM_CLASSES*sizeof(void *)));
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+		mm_class[i] = NULL;
+
 	// Set up the root block.
 	mm_root = mem_sbrk(MIN_BLK_SIZE);
 	if(mm_root == (void *)-1)
