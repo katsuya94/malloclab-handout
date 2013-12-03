@@ -45,8 +45,8 @@ team_t team = {
 	"nathanyeazel2016@u.northwestern.edu"
 };
 
-#define MM_CHECK
-#define VERBOSE
+//#define MM_CHECK
+//#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -109,7 +109,19 @@ static void mm_remove(void *blkp)
 		PREV(NEXT(blkp)) = PREV(blkp);
 }
 
+/*
+ * mm_insert - Inserts a FREE block in place of a specified non NULL block
+ *     Behavior is undefined for non FREE blocks
+ */
 
+static void mm_insert(void *dest, void *blkp)
+{
+	PREV(blkp) = dest;
+	NEXT(blkp) = NEXT(dest);
+	if(NEXT(dest) != NULL)
+		PREV(NEXT(dest)) = blkp;
+	NEXT(dest) = blkp;
+}
 
 static void **mm_coalesce(void *ptr)
 {
@@ -123,7 +135,6 @@ static void **mm_coalesce(void *ptr)
 	}
 	if(BLK_ALLOC(prev) == 0x0)
 	{
-		mm_remove(ptr);
 		mm_setbounds(prev, PACK(BLK_SIZE(prev) + BLK_SIZE(ptr), 0x0));
 		return prev;
 	}
@@ -299,37 +310,23 @@ void mm_free(void *ptr)
 	mm_check();
 #endif
 }
+
 // this finds the list that fits a specific block, and then puts that block into the list. 
 void mm_putList(void *ptr)
 {
-for(int i = 0; i < NUM_CLASSES; i++)
-{	
- 	if(CLASS_SIZE(i) > BLK_SIZE(ptr))
- 	{
- 		if(mm_class[i] == NULL)
- 			mm_class[i] = newclass(i);
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+	{	
+		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
+		{
+			if(mm_class[i] == NULL)
+				mm_class[i] = newclass(i);
 
- 		mm_insert(mm_class[i], ptr);
- 		return;
- 	}
+			mm_insert(mm_class[i], ptr);
+			return;
+		}
+	}
 }
-}
-
-/*
- * mm_insert - Inserts a FREE block in place of a specified non NULL block
- *     Behavior is undefined for non FREE blocks
- */
-
-static void mm_insert(void *dest, void *blkp)
-{
-	PREV(blkp) = dest;
-	NEXT(blkp) = NEXT(dest);
-	if(NEXT(dest) != NULL)
-		PREV(NEXT(dest)) = blkp;
-	NEXT(dest) = blkp;
-}
-
-
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
