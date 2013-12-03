@@ -115,14 +115,7 @@ static void mm_remove(void *blkp)
  * mm_insert - Inserts a FREE block in place of a specified non NULL block
  *     Behavior is undefined for non FREE blocks
  */
-static void mm_insert(void *dest, void *blkp)
-{
-	PREV(blkp) = dest;
-	NEXT(blkp) = NEXT(dest);
-	if(NEXT(dest) != NULL)
-		PREV(NEXT(dest)) = blkp;
-	NEXT(dest) = blkp;
-}
+
 
 static void **mm_coalesce(void *ptr)
 {
@@ -288,13 +281,36 @@ void mm_free(void *ptr)
 	void *blkp = BLOCK(ptr);
 	mm_setbounds(blkp, PACK(BLK_SIZE(blkp), 0x0));
 
-	mm_insert(mm_root, blkp);
 	blkp = mm_coalesce(blkp);
+	mm_findList(blkp);
 
 #ifdef MM_CHECK
 	mm_check();
 #endif
 }
+
+void mm_findList(void *ptr)
+{
+for(int i = 0; i < NUM_CLASSES; i++)
+{	
+ 	if(CLASS_SIZE(i) > BLK_SIZE(ptr))
+ 	{
+ 		mm_insert(mm_class[i], ptr);
+ 		return;
+ 	}
+}
+}
+
+static void mm_insert(void *dest, void *blkp)
+{
+	PREV(blkp) = dest;
+	NEXT(blkp) = NEXT(dest);
+	if(NEXT(dest) != NULL)
+		PREV(NEXT(dest)) = blkp;
+	NEXT(dest) = blkp;
+}
+
+
 
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
