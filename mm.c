@@ -111,10 +111,6 @@ static void mm_remove(void *blkp)
 		PREV(NEXT(blkp)) = PREV(blkp);
 }
 
-/*
- * mm_insert - Inserts a FREE block in place of a specified non NULL block
- *     Behavior is undefined for non FREE blocks
- */
 
 
 static void **mm_coalesce(void *ptr)
@@ -282,24 +278,32 @@ void mm_free(void *ptr)
 	mm_setbounds(blkp, PACK(BLK_SIZE(blkp), 0x0));
 
 	blkp = mm_coalesce(blkp);
-	mm_findList(blkp);
+	mm_putList(blkp);
 
 #ifdef MM_CHECK
 	mm_check();
 #endif
 }
-
-void mm_findList(void *ptr)
+// this finds the list that fits a specific block, and then puts that block into the list. 
+void mm_putList(void *ptr)
 {
 for(int i = 0; i < NUM_CLASSES; i++)
 {	
  	if(CLASS_SIZE(i) > BLK_SIZE(ptr))
  	{
+ 		if(mm_class[i] == NULL)
+ 			mm_class[i] = newclass(i);
+
  		mm_insert(mm_class[i], ptr);
  		return;
  	}
 }
 }
+
+/*
+ * mm_insert - Inserts a FREE block in place of a specified non NULL block
+ *     Behavior is undefined for non FREE blocks
+ */
 
 static void mm_insert(void *dest, void *blkp)
 {
