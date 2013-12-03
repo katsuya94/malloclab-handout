@@ -143,33 +143,21 @@ static void **mm_coalesce(void *ptr)
 
 }
 
-/* 
- * mm_init - Initialize the malloc package
- */
-int mm_init(void)
+static void __attribute__ ((noinline)) *mm_traverse(size_t newsize, void *root)
 {
-	// Set up the size classes
-	mm_class = mem_sbrk(ALIGN(NUM_CLASSES*sizeof(void **)));
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-		mm_class[i] = NULL;
+	void *blkp = NEXT(root);
+	void *found = NULL;
+	while(blkp != NULL && found == NULL)
+	{
+		if(BLK_SIZE(blkp) >= newsize)
+			found = blkp;
+		blkp = NEXT(blkp);
+	}
 
-	// Set up the root block.
-	mm_root = mem_sbrk(MIN_BLK_SIZE);
-	if(mm_root == (void *)-1)
-		return -1;
-	mm_setbounds(mm_root, PACK(MIN_BLK_SIZE, 0x2));
-	NEXT(mm_root) = NULL;
-	PREV(mm_root) = NULL;
-
-#ifdef MM_CHECK
-	mm_check();
-#endif
-
-	return 0;
+	return found;
 }
 
-void *mm_append(size_t newsize, void *root)
+static void *mm_append(size_t newsize, void *root)
 {
 	void *heaptail = LIN_PREV(mem_heap_hi()+1);
 	void *found;
@@ -199,7 +187,7 @@ void *mm_append(size_t newsize, void *root)
 	return found;
 }
 
-void *newclass(int i)
+static void *newclass(int i)
 {
 	void* root = mem_sbrk(MIN_BLK_SIZE);
 	if (root == (void *)-1)
@@ -211,18 +199,30 @@ void *newclass(int i)
 	return root;
 }
 
-void __attribute__ ((noinline)) *mm_traverse(size_t newsize, void *root)
+/* 
+ * mm_init - Initialize the malloc package
+ */
+int mm_init(void)
 {
-	void *blkp = NEXT(root);
-	void *found = NULL;
-	while(blkp != NULL && found == NULL)
-	{
-		if(BLK_SIZE(blkp) >= newsize)
-			found = blkp;
-		blkp = NEXT(blkp);
-	}
+	// Set up the size classes
+	mm_class = mem_sbrk(ALIGN(NUM_CLASSES*sizeof(void **)));
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+		mm_class[i] = NULL;
 
-	return found;
+	// Set up the root block.
+	mm_root = mem_sbrk(MIN_BLK_SIZE);
+	if(mm_root == (void *)-1)
+		return -1;
+	mm_setbounds(mm_root, PACK(MIN_BLK_SIZE, 0x2));
+	NEXT(mm_root) = NULL;
+	PREV(mm_root) = NULL;
+
+#ifdef MM_CHECK
+	mm_check();
+#endif
+
+	return 0;
 }
 
 void *mm_findSpace(size_t newsize){
