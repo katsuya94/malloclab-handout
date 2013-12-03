@@ -161,11 +161,26 @@ int mm_init(void)
 	return 0;
 }
 
-void __attribute__ ((noinline)) *mm_traverse(size_t newsize)
-{
-	void *blkp = NEXT(mm_root);
-	void *found = NULL;
+void *mm_findSpace(size_t newsize){
+	int i;
+	void * returnVal = NULL;
+	
+	for(i =0; i < NUM_CLASSES; i++)
+	{
+		if(CLASS_SIZE(i) > newsize)
+			returnVal = mm_traverse(newsize, mm_class[i]);
 
+		if (returnVal != NULL)
+			return returnVal;
+		
+	}
+	return NULL;
+}
+
+void __attribute__ ((noinline)) *mm_traverse(size_t newsize, void * root)
+{
+	void *blkp = NEXT(root);
+	void *found = NULL;
 	while(blkp != NULL && found == NULL)
 	{
 		if(BLK_SIZE(blkp) >= newsize)
@@ -220,7 +235,7 @@ void *mm_malloc(size_t size)
 	if(newsize < MIN_BLK_SIZE)
 		newsize = MIN_BLK_SIZE;
 	
-	void *found = mm_traverse(newsize);
+	void *found = mm_findSpace(newsize);
 
 	if(found == NULL)
 		found = mm_append(newsize);
