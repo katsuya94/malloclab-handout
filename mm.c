@@ -45,8 +45,8 @@ team_t team = {
 	"nathanyeazel2016@u.northwestern.edu"
 };
 
-//#define MM_CHECK
-//#define VERBOSE
+#define MM_CHECK
+#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -134,7 +134,6 @@ static void mm_insert(void *dest, void *blkp)
 	NEXT(dest) = blkp;
 }
 
-// Assumes that ptr is floating
 static void *mm_coalesce(void *ptr)
 {
 	void *next = LIN_NEXT(ptr);
@@ -147,16 +146,11 @@ static void *mm_coalesce(void *ptr)
 	}
 	if(BLK_ALLOC(prev) == 0x0)
 	{
-		mm_remove(prev);
 		mm_setbounds(prev, PACK(BLK_SIZE(prev) + BLK_SIZE(ptr), 0x0));
-		mm_putList(prev);
 		return prev;
 	}
 	else
-	{
-		mm_putList(ptr);
 		return ptr;
-	}
 
 }
 
@@ -193,6 +187,7 @@ static void mm_putList(void *ptr)
 
 static void *mm_append(size_t newsize, void *root)
 {
+	printf("mm_append()\n");
 	void *heaptail = LIN_PREV(mem_heap_hi()+1);
 	void *found;
 
@@ -205,6 +200,8 @@ static void *mm_append(size_t newsize, void *root)
 		mm_setbounds(found, PACK(newsize - BLK_SIZE(heaptail), 0x0));
 
 		found = mm_coalesce(found);
+		mm_remove(found);
+		mm_putList(found);
 	}
 	else
 	{
@@ -339,6 +336,7 @@ void mm_free(void *ptr)
 	mm_setbounds(blkp, PACK(BLK_SIZE(blkp), 0x0));
 
 	blkp = mm_coalesce(blkp);
+	mm_putList(blkp);
 
 #ifdef MM_CHECK
 	mm_check();
