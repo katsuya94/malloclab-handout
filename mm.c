@@ -51,6 +51,8 @@ team_t team = {
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
+#define MULTIPLIER 2
+
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
@@ -197,23 +199,27 @@ static void *mm_append(size_t newsize, void *root)
 
 	if(BLK_ALLOC(heaptail) == 0x0)
 	{
-		found = mem_sbrk(newsize - BLK_SIZE(heaptail));
+		size_t extension = newsize - BLK_SIZE(heaptail);
+		found = mem_sbrk(extension);
 		if (found == (void *)-1)
 			return NULL;
 
-		mm_setbounds(found, PACK(newsize - BLK_SIZE(heaptail), 0x0));
+		mm_setbounds(found, PACK(extension, 0x0));
 
 		found = mm_coalesce(found);
 	}
 	else
 	{
-		found = mem_sbrk(newsize);
-		if (found == (void *)-1)
-			return NULL;
+		int i;
+		for(i = 0; i < MULTIPLIER; i++)
+		{
+			found = mem_sbrk(newsize);
+			if (found == (void *)-1)
+				return NULL;
 
-		mm_setbounds(found, PACK(newsize, 0x0));
-
-		mm_insert(root, found);
+			mm_setbounds(found, PACK(newsize, 0x0));
+			mm_insert(root, found);
+		}
 	}
 
 	return found;
@@ -229,7 +235,7 @@ static void *mm_findSpace(size_t newsize)
 
 	int first = i;
 
-	for(i; i < NUM_CLASSES; i++)
+	for(i = first; i < NUM_CLASSES; i++) //add >= again
 	{
 		if(NEXT(ROOT(i)) != NULL)
 			returnVal = mm_traverse(newsize, ROOT(i));
