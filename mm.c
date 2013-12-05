@@ -98,6 +98,7 @@ static void mm_putList(void *ptr);
 static void *mm_append(size_t newsize, void *root);
 static void *newclass(int i);
 static void *mm_findSpace(size_t newsize);
+void dumpclasses(void);
 
 /*
  * mm_remove - Sets the header and footer of a block to value
