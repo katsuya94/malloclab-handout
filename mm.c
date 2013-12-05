@@ -45,8 +45,8 @@ team_t team = {
 	"nathanyeazel2016@u.northwestern.edu"
 };
 
-#define MM_CHECK
-#define VERBOSE
+//#define MM_CHECK
+//#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -102,7 +102,7 @@ static void mm_setbounds(void *blkp, size_t value)
  * mm_remove - For a consistent stack, this removes a FREE block from the chain
  *     Behavior is undefined for non FREE blocks
  */
-static __attribute__ ((noinline)) void mm_remove(void *blkp)
+static void mm_remove(void *blkp)
 {
 	NEXT(PREV(blkp)) = NEXT(blkp);
 	if(NEXT(blkp) != NULL)
@@ -199,49 +199,6 @@ static void *newclass(int i)
 	return root;
 }
 
-// this finds the list that fits a specific block, and then puts that block into the list. 
-static void mm_putList(void *ptr)
-{
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-	{	
-		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
-		{
-			if(mm_class[i] == NULL)
-				mm_class[i] = newclass(i);
-
-			mm_insert(mm_class[i], ptr);
-			return;
-		}
-	}
-}
-
-static void *mm_findSpace(size_t newsize)
-{
-	int i;
-	void *returnVal = NULL;
-	int first = -1;
-	
-	for(i = 0; i < NUM_CLASSES; i++)
-	{
-		if(CLASS_SIZE(i) > newsize)
-		{
-			if(first == -1)
-				first = i;
-			
-			if(mm_class[i] != NULL)
-				returnVal = mm_traverse(newsize, mm_class[i]);
-		}
-
-		if (returnVal != NULL)
-			return returnVal;	
-	}
-
-	if(mm_class[first] == NULL)
-		mm_class[first] = newclass(first);
-	return mm_append(newsize, mm_class[first]);
-}
-
 /* 
  * mm_init - Initialize the malloc package
  */
@@ -266,6 +223,31 @@ int mm_init(void)
 #endif
 
 	return 0;
+}
+
+void *mm_findSpace(size_t newsize){
+	int i;
+	void *returnVal = NULL;
+	int first = -1;
+	
+	for(i = 0; i < NUM_CLASSES; i++)
+	{
+		if(CLASS_SIZE(i) > newsize)
+		{
+			if(first == -1)
+				first = i;
+			
+			if(mm_class[i] != NULL)
+				returnVal = mm_traverse(newsize, mm_class[i]);
+		}
+
+		if (returnVal != NULL)
+			return returnVal;	
+	}
+
+	if(mm_class[first] == NULL)
+		mm_class[first] = newclass(first);
+	return mm_append(newsize, mm_class[first]);
 }
 
 /*
@@ -329,6 +311,23 @@ void mm_free(void *ptr)
 #endif
 }
 
+// this finds the list that fits a specific block, and then puts that block into the list. 
+void mm_putList(void *ptr)
+{
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+	{	
+		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
+		{
+			if(mm_class[i] == NULL)
+				mm_class[i] = newclass(i);
+
+			mm_insert(mm_class[i], ptr);
+			return;
+		}
+	}
+}
+
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
@@ -360,7 +359,6 @@ int mm_check(void)
 	printf("\n");
 	for(blkp = mm_root; blkp < mem_heap_hi() + 1; blkp = LIN_NEXT(blkp))
 		printf("%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
-	dumpclasses();
 #endif
 
 	blkp = mm_root;
@@ -397,27 +395,6 @@ int mm_check(void)
 	}
 
 	return 1;
-}
-
-void __attribute__ ((noinline)) dumpclasses(void) {
-	int i;
-	printf("\n");
-	for(i = 0; i < NUM_CLASSES; i++)
-	{
-		printf("#%2d Max: 0x%08x Status: ", i, CLASS_SIZE(i));
-		if(mm_class[i] == NULL)
-			printf("Uninitialized\n");
-		else
-		{
-			printf("Initialized\n");
-			void* blkp = mm_class[i];
-			while(blkp != NULL)
-			{
-				printf("\t%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
-				blkp = NEXT(blkp);
-			}
-		}
-	}
 }
 
 
