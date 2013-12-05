@@ -45,8 +45,8 @@ team_t team = {
 	"nathanyeazel2016@u.northwestern.edu"
 };
 
-//#define MM_CHECK
-//#define VERBOSE
+#define MM_CHECK
+#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
@@ -87,6 +87,17 @@ team_t team = {
 void *mm_root;
 void **mm_class;
 
+static void mm_setbounds(void *blkp, size_t value);
+static void mm_setbounds(void *blkp, size_t value);
+static void mm_remove(void *blkp);
+static void mm_insert(void *dest, void *blkp);
+static void *mm_coalesce(void *ptr);
+static void *mm_traverse(size_t newsize, void *root);
+static void mm_putList(void *ptr);
+static void *mm_append(size_t newsize, void *root);
+static void *newclass(int i);
+static void *mm_findSpace(size_t newsize);
+
 /*
  * mm_remove - Sets the header and footer of a block to value
  *     Note that size also includes the allocation flag
@@ -123,7 +134,7 @@ static void mm_insert(void *dest, void *blkp)
 	NEXT(dest) = blkp;
 }
 
-static void **mm_coalesce(void *ptr)
+static void *mm_coalesce(void *ptr)
 {
 	void *next = LIN_NEXT(ptr);
 	void *prev = LIN_PREV(ptr);
@@ -143,7 +154,7 @@ static void **mm_coalesce(void *ptr)
 
 }
 
-static void __attribute__ ((noinline)) *mm_traverse(size_t newsize, void *root)
+static void *mm_traverse(size_t newsize, void *root)
 {
 	void *blkp = NEXT(root);
 	void *found = NULL;
@@ -157,8 +168,26 @@ static void __attribute__ ((noinline)) *mm_traverse(size_t newsize, void *root)
 	return found;
 }
 
+// this finds the list that fits a specific block, and then puts that block into the list. 
+static void mm_putList(void *ptr)
+{
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+	{	
+		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
+		{
+			if(mm_class[i] == NULL)
+				mm_class[i] = newclass(i);
+
+			mm_insert(mm_class[i], ptr);
+			return;
+		}
+	}
+}
+
 static void *mm_append(size_t newsize, void *root)
 {
+	printf("mm_append()\n");
 	void *heaptail = LIN_PREV(mem_heap_hi()+1);
 	void *found;
 
@@ -170,8 +199,9 @@ static void *mm_append(size_t newsize, void *root)
 
 		mm_setbounds(found, PACK(newsize - BLK_SIZE(heaptail), 0x0));
 
-		mm_insert(root, found);
 		found = mm_coalesce(found);
+		mm_remove(found);
+		mm_putList(found);
 	}
 	else
 	{
@@ -199,7 +229,9 @@ static void *newclass(int i)
 	return root;
 }
 
-static void *mm_findSpace(size_t newsize){
+// Redo this code to look cleaner
+static void *mm_findSpace(size_t newsize)
+{
 	int i;
 	void *returnVal = NULL;
 	int first = -1;
@@ -222,23 +254,6 @@ static void *mm_findSpace(size_t newsize){
 	if(mm_class[first] == NULL)
 		mm_class[first] = newclass(first);
 	return mm_append(newsize, mm_class[first]);
-}
-
-// this finds the list that fits a specific block, and then puts that block into the list. 
-static void mm_putList(void *ptr)
-{
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-	{	
-		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
-		{
-			if(mm_class[i] == NULL)
-				mm_class[i] = newclass(i);
-
-			mm_insert(mm_class[i], ptr);
-			return;
-		}
-	}
 }
 
 /* 
@@ -359,6 +374,7 @@ int mm_check(void)
 	printf("\n");
 	for(blkp = mm_root; blkp < mem_heap_hi() + 1; blkp = LIN_NEXT(blkp))
 		printf("%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
+	dumpclasses();
 #endif
 
 	blkp = mm_root;
@@ -397,7 +413,7 @@ int mm_check(void)
 	return 1;
 }
 
-void __attribute__ ((noinline)) dumpclasses(void) {
+void dumpclasses(void) {
 	int i;
 	printf("\n");
 	for(i = 0; i < NUM_CLASSES; i++)
