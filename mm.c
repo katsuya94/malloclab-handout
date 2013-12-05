@@ -78,25 +78,12 @@ team_t team = {
 #define LIN_NEXT(bp) ((void *)((char *)bp + BLK_SIZE(bp)))
 #define LIN_PREV(bp) ((void *)((char *)bp - (*((size_t *)((char *)bp - SIZE_T_SIZE)) & ~0x3)))
 
-#define NUM_CLASSES (sizeof(size_t)*8-5)
-#define CLASS_SIZE(n) (0x40*(1 << n))
-
 /* globals
  * mm_root - Pointer to the root block, located at the bottom of the heap
  */
 void *mm_root;
-void **mm_class;
 
-static void mm_setbounds(void *blkp, size_t value);
-static void mm_setbounds(void *blkp, size_t value);
-static void mm_remove(void *blkp);
-static void mm_insert(void *dest, void *blkp);
-static void *mm_coalesce(void *ptr);
-static void *mm_traverse(size_t newsize, void *root);
-static void mm_putList(void *ptr);
-static void *mm_append(size_t newsize, void *root);
-static void *newclass(int i);
-static void *mm_findSpace(size_t newsize);
+int mm_check(void);
 
 /*
  * mm_remove - Sets the header and footer of a block to value
@@ -124,7 +111,6 @@ static void mm_remove(void *blkp)
  * mm_insert - Inserts a FREE block in place of a specified non NULL block
  *     Behavior is undefined for non FREE blocks
  */
-
 static void mm_insert(void *dest, void *blkp)
 {
 	PREV(blkp) = dest;
@@ -134,8 +120,7 @@ static void mm_insert(void *dest, void *blkp)
 	NEXT(dest) = blkp;
 }
 
-// Assumes that ptr is floating
-static void *mm_coalesce(void *ptr)
+static void **mm_coalesce(void *ptr)
 {
 	void *next = LIN_NEXT(ptr);
 	void *prev = LIN_PREV(ptr);
@@ -147,116 +132,13 @@ static void *mm_coalesce(void *ptr)
 	}
 	if(BLK_ALLOC(prev) == 0x0)
 	{
-		mm_remove(prev);
+		mm_remove(ptr);
 		mm_setbounds(prev, PACK(BLK_SIZE(prev) + BLK_SIZE(ptr), 0x0));
-		mm_putList(prev);
 		return prev;
 	}
 	else
-	{
-		mm_putList(ptr);
 		return ptr;
-	}
 
-}
-
-static void *mm_traverse(size_t newsize, void *root)
-{
-	void *blkp = NEXT(root);
-	void *found = NULL;
-	while(blkp != NULL && found == NULL)
-	{
-		if(BLK_SIZE(blkp) >= newsize)
-			found = blkp;
-		blkp = NEXT(blkp);
-	}
-
-	return found;
-}
-
-// this finds the list that fits a specific block, and then puts that block into the list. 
-static void mm_putList(void *ptr)
-{
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-	{	
-		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
-		{
-			if(mm_class[i] == NULL)
-				mm_class[i] = newclass(i);
-
-			mm_insert(mm_class[i], ptr);
-			return;
-		}
-	}
-}
-
-static void *mm_append(size_t newsize, void *root)
-{
-	void *heaptail = LIN_PREV(mem_heap_hi()+1);
-	void *found;
-
-	if(BLK_ALLOC(heaptail) == 0x0)
-	{
-		found = mem_sbrk(newsize - BLK_SIZE(heaptail));
-		if (found == (void *)-1)
-			return NULL;
-
-		mm_setbounds(found, PACK(newsize - BLK_SIZE(heaptail), 0x0));
-
-		found = mm_coalesce(found);
-	}
-	else
-	{
-		found = mem_sbrk(newsize);
-		if (found == (void *)-1)
-			return NULL;
-
-		mm_setbounds(found, PACK(newsize, 0x0));
-
-		mm_insert(root, found);
-	}
-
-	return found;
-}
-
-static void *newclass(int i)
-{
-	void* root = mem_sbrk(MIN_BLK_SIZE);
-	if (root == (void *)-1)
-		return NULL;
-	mm_setbounds(root, PACK(MIN_BLK_SIZE, 0x2));
-	PREV(root) = NULL;
-	NEXT(root) = NULL;
-
-	return root;
-}
-
-// Redo this code to look cleaner
-static void *mm_findSpace(size_t newsize)
-{
-	int i;
-	void *returnVal = NULL;
-	int first = -1;
-	
-	for(i = 0; i < NUM_CLASSES; i++)
-	{
-		if(CLASS_SIZE(i) > newsize)
-		{
-			if(first == -1)
-				first = i;
-			
-			if(mm_class[i] != NULL)
-				returnVal = mm_traverse(newsize, mm_class[i]);
-		}
-
-		if (returnVal != NULL)
-			return returnVal;	
-	}
-
-	if(mm_class[first] == NULL)
-		mm_class[first] = newclass(first);
-	return mm_append(newsize, mm_class[first]);
 }
 
 /* 
@@ -264,12 +146,6 @@ static void *mm_findSpace(size_t newsize)
  */
 int mm_init(void)
 {
-	// Set up the size classes
-	mm_class = mem_sbrk(ALIGN(NUM_CLASSES*sizeof(void **)));
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-		mm_class[i] = NULL;
-
 	// Set up the root block.
 	mm_root = mem_sbrk(MIN_BLK_SIZE);
 	if(mm_root == (void *)-1)
@@ -283,6 +159,51 @@ int mm_init(void)
 #endif
 
 	return 0;
+}
+
+void __attribute__ ((noinline)) *mm_traverse(size_t newsize)
+{
+	void *blkp = NEXT(mm_root);
+	void *found = NULL;
+
+	while(blkp != NULL && found == NULL)
+	{
+		if(BLK_SIZE(blkp) >= newsize)
+			found = blkp;
+		blkp = NEXT(blkp);
+	}
+
+	return found;
+}
+
+void *mm_append(size_t newsize)
+{
+	void *heaptail = LIN_PREV(mem_heap_hi()+1);
+	void *found;
+
+	if(BLK_ALLOC(heaptail) == 0x0)
+	{
+		found = mem_sbrk(newsize - BLK_SIZE(heaptail));
+		if (found == (void *)-1)
+			return NULL;
+
+		mm_setbounds(found, PACK(newsize - BLK_SIZE(heaptail), 0x0));
+
+		mm_insert(mm_root, found);
+		found = mm_coalesce(found);
+	}
+	else
+	{
+		found = mem_sbrk(newsize);
+		if (found == (void *)-1)
+			return NULL;
+
+		mm_setbounds(found, PACK(newsize, 0x0));
+
+		mm_insert(mm_root, found);
+	}
+
+	return found;
 }
 
 /*
@@ -299,11 +220,15 @@ void *mm_malloc(size_t size)
 	if(newsize < MIN_BLK_SIZE)
 		newsize = MIN_BLK_SIZE;
 	
-	void *found = mm_findSpace(newsize);
+	void *found = mm_traverse(newsize);
+
+	if(found == NULL)
+		found = mm_append(newsize);
 
 	if(found == NULL)
 		return NULL;
 
+	void *prev = PREV(found);
 	mm_remove(found);
 
 	size_t tail_size = BLK_SIZE(found) - newsize;
@@ -316,7 +241,7 @@ void *mm_malloc(size_t size)
 		void *tail = LIN_NEXT(found);
 		mm_setbounds(tail, PACK(tail_size, 0x0));
 		
-		mm_putList(tail);
+		mm_insert(prev, tail);
 	}
 
 #ifdef MM_CHECK
@@ -338,6 +263,7 @@ void mm_free(void *ptr)
 	void *blkp = BLOCK(ptr);
 	mm_setbounds(blkp, PACK(BLK_SIZE(blkp), 0x0));
 
+	mm_insert(mm_root, blkp);
 	blkp = mm_coalesce(blkp);
 
 #ifdef MM_CHECK
@@ -375,13 +301,14 @@ int mm_check(void)
 #ifdef VERBOSE
 	printf("\n");
 	for(blkp = mm_root; blkp < mem_heap_hi() + 1; blkp = LIN_NEXT(blkp))
-		printf("%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
-	dumpclasses();
+		printf("%#08x %s NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, (BLK_ALLOC(blkp) & 0x1) ? "ALLOC:" : " FREE:", NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
 #endif
 
 	blkp = mm_root;
+	size_t sum = 0;
 	while(blkp < mem_heap_hi()+1)
 	{
+		sum += BLK_SIZE(blkp);
 		if(BLK_ALLOC(blkp) == 0x0 && BLK_ALLOC(LIN_PREV(blkp)) == 0x0)
 		{
 			printf("Free block %#x is preceded by a free block.\n", blkp);
@@ -389,6 +316,12 @@ int mm_check(void)
 		}
 
 		blkp = LIN_NEXT(blkp);
+	}
+
+	if(sum != mem_heapsize())
+	{
+		printf("The heap size is different from the sum of its blocks.\n");
+		return 0;
 	}
 
 	blkp = mm_root;
@@ -415,26 +348,6 @@ int mm_check(void)
 	return 1;
 }
 
-void dumpclasses(void) {
-	int i;
-	printf("\n");
-	for(i = 0; i < NUM_CLASSES; i++)
-	{
-		printf("#%2d Max: 0x%08x Status: ", i, CLASS_SIZE(i));
-		if(mm_class[i] == NULL)
-				printf("Uninitialized\n");
-		else
-		{
-			printf("Initialized\n");
-			void* blkp = mm_class[i];
-			while(blkp != NULL)
-			{
-					printf("\t%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
-					blkp = NEXT(blkp);
-			}
-		}
-	}
-}
 
 
 
