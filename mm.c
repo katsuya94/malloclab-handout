@@ -96,7 +96,6 @@ static void *mm_coalesce(void *ptr);
 static void *mm_traverse(size_t newsize, void *root);
 static void mm_putList(void *ptr);
 static void *mm_append(size_t newsize, void *root);
-static void *newclass(int i);
 static void *mm_findSpace(size_t newsize);
 void dumpclasses(void);
 
@@ -115,7 +114,7 @@ static void mm_setbounds(void *blkp, size_t value)
  * mm_remove - For a consistent stack, this removes a FREE block from the chain
  *     Behavior is undefined for non FREE blocks
  */
-static void __attribute__ ((noinline)) mm_remove(void *blkp)
+static void mm_remove(void *blkp)
 {
 	NEXT(PREV(blkp)) = NEXT(blkp);
 	if(NEXT(blkp) != NULL)
@@ -225,18 +224,15 @@ static void *mm_findSpace(size_t newsize)
 {
 	int i = 0;
 	void *returnVal = NULL;
-	int first = -1;
 
-	for(i = 0; i < NUM_CLASSES; i++)
+	for(i; CLASS_SIZE(i) <= newsize; i++);
+
+	int first = i;
+
+	for(i; i < NUM_CLASSES; i++)
 	{
-		if(CLASS_SIZE(i) > newsize)
-		{
-			if(first == -1)
-				first = i;
-			
-			if(NEXT(ROOT(i)) != NULL)
-				returnVal = mm_traverse(newsize, ROOT(i));
-		}
+		if(NEXT(ROOT(i)) != NULL)
+			returnVal = mm_traverse(newsize, ROOT(i));
 
 		if (returnVal != NULL)
 			return returnVal;	
