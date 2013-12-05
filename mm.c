@@ -51,8 +51,6 @@ team_t team = {
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
-#define MULTIPLIER 2
-
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
@@ -210,16 +208,19 @@ static void *mm_append(size_t newsize, void *root)
 	}
 	else
 	{
-		int i;
-		for(i = 0; i < MULTIPLIER; i++)
-		{
-			found = mem_sbrk(newsize);
-			if (found == (void *)-1)
-				return NULL;
+		void *extra = mem_sbrk(newsize);
+		if (extra == (void *)-1)
+			return NULL;
 
-			mm_setbounds(found, PACK(newsize, 0x0));
-			mm_insert(root, found);
-		}
+		mm_setbounds(extra, PACK(newsize, 0x0));
+		mm_insert(root, extra);
+
+		found = mem_sbrk(newsize);
+		if (found == (void *)-1)
+			return NULL;
+
+		mm_setbounds(found, PACK(newsize, 0x0));
+		mm_insert(root, found);
 	}
 
 	return found;
