@@ -199,6 +199,48 @@ static void *newclass(int i)
 	return root;
 }
 
+static void *mm_findSpace(size_t newsize){
+	int i;
+	void *returnVal = NULL;
+	int first = -1;
+	
+	for(i = 0; i < NUM_CLASSES; i++)
+	{
+		if(CLASS_SIZE(i) > newsize)
+		{
+			if(first == -1)
+				first = i;
+			
+			if(mm_class[i] != NULL)
+				returnVal = mm_traverse(newsize, mm_class[i]);
+		}
+
+		if (returnVal != NULL)
+			return returnVal;	
+	}
+
+	if(mm_class[first] == NULL)
+		mm_class[first] = newclass(first);
+	return mm_append(newsize, mm_class[first]);
+}
+
+// this finds the list that fits a specific block, and then puts that block into the list. 
+static void mm_putList(void *ptr)
+{
+	int i;
+	for(i = 0; i < NUM_CLASSES; i++)
+	{	
+		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
+		{
+			if(mm_class[i] == NULL)
+				mm_class[i] = newclass(i);
+
+			mm_insert(mm_class[i], ptr);
+			return;
+		}
+	}
+}
+
 /* 
  * mm_init - Initialize the malloc package
  */
@@ -223,31 +265,6 @@ int mm_init(void)
 #endif
 
 	return 0;
-}
-
-void *mm_findSpace(size_t newsize){
-	int i;
-	void *returnVal = NULL;
-	int first = -1;
-	
-	for(i = 0; i < NUM_CLASSES; i++)
-	{
-		if(CLASS_SIZE(i) > newsize)
-		{
-			if(first == -1)
-				first = i;
-			
-			if(mm_class[i] != NULL)
-				returnVal = mm_traverse(newsize, mm_class[i]);
-		}
-
-		if (returnVal != NULL)
-			return returnVal;	
-	}
-
-	if(mm_class[first] == NULL)
-		mm_class[first] = newclass(first);
-	return mm_append(newsize, mm_class[first]);
 }
 
 /*
@@ -309,23 +326,6 @@ void mm_free(void *ptr)
 #ifdef MM_CHECK
 	mm_check();
 #endif
-}
-
-// this finds the list that fits a specific block, and then puts that block into the list. 
-void mm_putList(void *ptr)
-{
-	int i;
-	for(i = 0; i < NUM_CLASSES; i++)
-	{	
-		if(CLASS_SIZE(i) > BLK_SIZE(ptr))
-		{
-			if(mm_class[i] == NULL)
-				mm_class[i] = newclass(i);
-
-			mm_insert(mm_class[i], ptr);
-			return;
-		}
-	}
 }
 
 /*
@@ -397,6 +397,26 @@ int mm_check(void)
 	return 1;
 }
 
+void __attribute__ ((noinline)) dumpclasses(void) {
+	int i;
+	printf("\n");
+	for(i = 0; i < NUM_CLASSES; i++)
+	{
+		printf("#%2d Max: 0x%08x Status: ", i, CLASS_SIZE(i));
+		if(mm_class[i] == NULL)
+				printf("Uninitialized\n");
+		else
+		{
+			printf("Initialized\n");
+			void* blkp = mm_class[i];
+			while(blkp != NULL)
+			{
+					printf("\t%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
+					blkp = NEXT(blkp);
+			}
+		}
+	}
+}
 
 
 
