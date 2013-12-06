@@ -29,6 +29,12 @@
  * until the last NEXT, after which is the footer of SIZE_T_SIZE.
  * This concludes the static bookkeeping information in the heap.
  *
+ * Every time the mm_malloc is forced to extend the heap and there is not a free block at the top of the heap,
+ *     it makes two blocks of the requested size, returning the latter. This design decision drastically decreases
+ *     the amount of time spent searching for a similarly sized block that doesn't exist only to extend the heap
+ *     again. In many cases, it even improves utilization by not wasting larger free blocks on allocating smaller
+ *     ones.
+ *
  * The package is guaranteed to:
  *     Never have adjacent free blocks
  *     Never have a free block in the wrong list
@@ -228,7 +234,7 @@ void *mm_realloc(void *ptr, size_t size)
 }
 
 /*
- * mm_append - Extends the stack to fit a new block
+ * mm_append - Extends the heap to fit a new block
  *     If there is a free block at the top of the heap, add to that block and return.
  *     Otherwise, allocate two blocks of the requested size, and return the top block.
  */
@@ -386,7 +392,7 @@ static void mm_setBounds(void *blkp, size_t value)
 }
 
 /*
- * mm_check - Peforms checks on the consistency of the stack. When VERBOSE is defined, prints heap contents.
+ * mm_check - Peforms checks on the consistency of the heap. When VERBOSE is defined, prints heap contents.
  */
 static int mm_check(void)
 {
