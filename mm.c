@@ -112,10 +112,8 @@ team_t team = {
 #define ROOT(n) ((void *)((char *) mem_heap_lo() + SIZE_T_SIZE * n))
 
 /*
- * Function Prototypes
+ * Static Function Prototypes
  */
-static int mm_check(void);
-static void mm_printLists(void);
 static void *mm_append(size_t newsize, void *root);
 static void *mm_findSpace(size_t newsize);
 static void *mm_unfloat(void *ptr);
@@ -124,165 +122,8 @@ static void mm_putList(void *ptr);
 static void mm_insert(void *dest, void *blkp);
 static void mm_remove(void *blkp);
 static void mm_setBounds(void *blkp, size_t value);
-
-/*
- * mm_setBounds - Sets the header and footer of a block to value
- *     Note that size also includes the allocation flag
- *     Common usage passes the result of PACK(size, alloc) to value
- *     It is imprtant that the header is set first, as a proper header is required to find the footer
- */
-static void mm_setBounds(void *blkp, size_t value)
-{
-	HDR(blkp) = value;
-	FTR(blkp) = value;
-}
-
-/*
- * mm_remove - Removes a FREE block from the chain
- *     Behavior is undefined for floating blocks or root blocks.
- */
-static void mm_remove(void *blkp)
-{
-	NEXT(PREV(blkp)) = NEXT(blkp);
-	if(NEXT(blkp) != NULL)
-		PREV(NEXT(blkp)) = PREV(blkp);
-}
-
-/*
- * mm_insert - Inserts a block after a specified block
- *     Behavior is only defined for floating blocks.
- */
-static void mm_insert(void *dest, void *blkp)
-{
-	PREV(blkp) = dest;
-	NEXT(blkp) = NEXT(dest);
-	if(NEXT(dest) != NULL)
-		PREV(NEXT(dest)) = blkp;
-	NEXT(dest) = blkp;
-}
-
-/*
- * mm_unfloat - Performs all the necessary operations to place a floating block in the heap, preserving validity
- *     Behavior is only defined for floating blocks.
- *     Returns a pointer to the input block, possibly coalesced with the immediately preceding and following blocks.
- */
-static void *mm_unfloat(void *blkp)
-{
-	void *next = LIN_NEXT(blkp);
-	void *prev = LIN_PREV(blkp);
-
-	if(next < mem_heap_hi()+1 && BLK_ALLOC(next) == 0x0)
-	{
-		mm_remove(next);
-		mm_setBounds(blkp, PACK(BLK_SIZE(blkp) + BLK_SIZE(next), 0x0));
-	}
-	if(BLK_ALLOC(prev) == 0x0)
-	{
-		mm_remove(prev);
-		mm_setBounds(prev, PACK(BLK_SIZE(prev) + BLK_SIZE(blkp), 0x0));
-		mm_putList(prev);
-		return prev;
-	}
-	else
-	{
-		mm_putList(blkp);
-		return blkp;
-	}
-
-}
-
-/*
- * mm_traverse - Searches a free block list and returns the first block that fits newsize or NULL
- */
-static void *mm_traverse(size_t newsize, void *root)
-{
-	void *blkp = NEXT(root);
-	void *found = NULL;
-	while(blkp != NULL && found == NULL)
-	{
-		if(BLK_SIZE(blkp) >= newsize)
-			found = blkp;
-		blkp = NEXT(blkp);
-	}
-	return found;
-}
-
-/*
- * mm_putList - Takes a floating block and puts in the appropriate list
- *     Behavior is only defined for floating blocks.
- *     Guaranteed to find an appropriate list.
- */
-static void mm_putList(void *ptr)
-{
-	int i = 0;
-	for(i; LIST_MAX_SIZE(i) < BLK_SIZE(ptr); i++);
-	mm_insert(ROOT(i), ptr);
-}
-
-/*
- * mm_append - Extends the stack to fit a new block
- *     If there is a free block at the top of the heap, add to that block and return.
- *     Otherwise, allocate two blocks of the requested size, and return the top block.
- */
-static void *mm_append(size_t newsize, void *root)
-{
-	void *heaptail = LIN_PREV(mem_heap_hi()+1);
-	void *found;
-
-	if(BLK_ALLOC(heaptail) == 0x0)
-	{
-		size_t extension = newsize - BLK_SIZE(heaptail);
-		found = mem_sbrk(extension);
-		if (found == (void *)-1)
-			return NULL;
-
-		mm_setBounds(found, PACK(extension, 0x0));
-
-		found = mm_unfloat(found);
-	}
-	else
-	{
-		void *extra = mem_sbrk(newsize);
-		if (extra == (void *)-1)
-			return NULL;
-
-		mm_setBounds(extra, PACK(newsize, 0x0));
-		mm_insert(root, extra);
-
-		found = mem_sbrk(newsize);
-		if (found == (void *)-1)
-			return NULL;
-
-		mm_setBounds(found, PACK(newsize, 0x0));
-		mm_insert(root, found);
-	}
-
-	return found;
-}
-
-/*
- * mm_findSpace - Guaranteed to find a free block of size newsize or greater
- */
-static void *mm_findSpace(size_t newsize)
-{
-	int i = 0;
-	void *returnval = NULL;
-
-	// Calculates and saves the first free list that should fit newsize
-	for(i; LIST_MAX_SIZE(i) < newsize; i++);
-	int first = i;
-
-	for(i; i < NUM_LISTS; i++)
-	{
-		if(NEXT(ROOT(i)) != NULL)
-			returnval = mm_traverse(newsize, ROOT(i));
-
-		if (returnval != NULL)
-			return returnval;	
-	}
-
-	return mm_append(newsize, ROOT(first));
-}
+static int mm_check(void);
+static void mm_printLists(void);
 
 /* 
  * mm_init - Initialize the malloc package
@@ -384,6 +225,164 @@ void *mm_realloc(void *ptr, size_t size)
 	memcpy(newptr, oldptr, copySize);
 	mm_free(oldptr);
 	return newptr;
+}
+
+/*
+ * mm_append - Extends the stack to fit a new block
+ *     If there is a free block at the top of the heap, add to that block and return.
+ *     Otherwise, allocate two blocks of the requested size, and return the top block.
+ */
+static void *mm_append(size_t newsize, void *root)
+{
+	void *heaptail = LIN_PREV(mem_heap_hi()+1);
+	void *found;
+
+	if(BLK_ALLOC(heaptail) == 0x0)
+	{
+		size_t extension = newsize - BLK_SIZE(heaptail);
+		found = mem_sbrk(extension);
+		if (found == (void *)-1)
+			return NULL;
+
+		mm_setBounds(found, PACK(extension, 0x0));
+
+		found = mm_unfloat(found);
+	}
+	else
+	{
+		void *extra = mem_sbrk(newsize);
+		if (extra == (void *)-1)
+			return NULL;
+
+		mm_setBounds(extra, PACK(newsize, 0x0));
+		mm_insert(root, extra);
+
+		found = mem_sbrk(newsize);
+		if (found == (void *)-1)
+			return NULL;
+
+		mm_setBounds(found, PACK(newsize, 0x0));
+		mm_insert(root, found);
+	}
+
+	return found;
+}
+
+/*
+ * mm_findSpace - Guaranteed to find a free block of size newsize or greater
+ */
+static void *mm_findSpace(size_t newsize)
+{
+	int i = 0;
+	void *returnval = NULL;
+
+	// Calculates and saves the first free list that should fit newsize
+	for(i; LIST_MAX_SIZE(i) < newsize; i++);
+	int first = i;
+
+	for(i; i < NUM_LISTS; i++)
+	{
+		if(NEXT(ROOT(i)) != NULL)
+			returnval = mm_traverse(newsize, ROOT(i));
+
+		if (returnval != NULL)
+			return returnval;	
+	}
+
+	return mm_append(newsize, ROOT(first));
+}
+
+/*
+ * mm_unfloat - Performs all the necessary operations to place a floating block in the heap, preserving validity
+ *     Behavior is only defined for floating blocks.
+ *     Returns a pointer to the input block, possibly coalesced with the immediately preceding and following blocks.
+ */
+static void *mm_unfloat(void *blkp)
+{
+	void *next = LIN_NEXT(blkp);
+	void *prev = LIN_PREV(blkp);
+
+	if(next < mem_heap_hi()+1 && BLK_ALLOC(next) == 0x0)
+	{
+		mm_remove(next);
+		mm_setBounds(blkp, PACK(BLK_SIZE(blkp) + BLK_SIZE(next), 0x0));
+	}
+	if(BLK_ALLOC(prev) == 0x0)
+	{
+		mm_remove(prev);
+		mm_setBounds(prev, PACK(BLK_SIZE(prev) + BLK_SIZE(blkp), 0x0));
+		mm_putList(prev);
+		return prev;
+	}
+	else
+	{
+		mm_putList(blkp);
+		return blkp;
+	}
+}
+
+/*
+ * mm_traverse - Searches a free block list and returns the first block that fits newsize or NULL
+ */
+static void *mm_traverse(size_t newsize, void *root)
+{
+	void *blkp = NEXT(root);
+	void *found = NULL;
+	while(blkp != NULL && found == NULL)
+	{
+		if(BLK_SIZE(blkp) >= newsize)
+			found = blkp;
+		blkp = NEXT(blkp);
+	}
+	return found;
+}
+
+/*
+ * mm_putList - Takes a floating block and puts in the appropriate list
+ *     Behavior is only defined for floating blocks.
+ *     Guaranteed to find an appropriate list.
+ */
+static void mm_putList(void *ptr)
+{
+	int i = 0;
+	for(i; LIST_MAX_SIZE(i) < BLK_SIZE(ptr); i++);
+	mm_insert(ROOT(i), ptr);
+}
+
+/*
+ * mm_insert - Inserts a block after a specified block
+ *     Behavior is only defined for floating blocks.
+ */
+static void mm_insert(void *dest, void *blkp)
+{
+	PREV(blkp) = dest;
+	NEXT(blkp) = NEXT(dest);
+	if(NEXT(dest) != NULL)
+		PREV(NEXT(dest)) = blkp;
+	NEXT(dest) = blkp;
+}
+
+/*
+ * mm_remove - Removes a FREE block from the chain
+ *     Behavior is undefined for floating blocks or root blocks.
+ */
+static void mm_remove(void *blkp)
+{
+	NEXT(PREV(blkp)) = NEXT(blkp);
+	if(NEXT(blkp) != NULL)
+		PREV(NEXT(blkp)) = PREV(blkp);
+}
+
+/*
+ * mm_setBounds - Sets the header and footer of a block to value
+ *     Note that size also includes the allocation flag
+ *     Common usage passes the result of PACK(size, alloc) to value
+ *     It is imprtant that the header is set first, as a proper header is required to find the footer
+ */
+static void mm_setBounds(void *blkp, size_t value)
+{
+	HDR(blkp) = value;
+	FTR(blkp) = value;
 }
 
 /*
