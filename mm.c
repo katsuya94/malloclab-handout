@@ -397,6 +397,7 @@ static void mm_setBounds(void *blkp, size_t value)
 static int mm_check(void)
 {
 	void *blkp;
+	void *current; 
 
 #ifdef VERBOSE
 	printf("\n");
@@ -404,7 +405,30 @@ static int mm_check(void)
 		printf("%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
 	mm_printLists();
 #endif
+	
+	for(i = 0; i < NUM_LISTS; i++) //This will check through all of the free lists for various problems
+	{
+		current = ROOT(i);
+		while(NEXT(current) != NULL)
+		{
+			if (current < mem_heap_lo() || current > mem_heap_hi())
+			{
+				printf("Block %#x does not point to a valid address.\n", current);
+			}
 
+			if(BLK_ALLOC(current) == 0x1)
+			{
+				printf("Block %#x is in a free list but is not free.\n", current);
+			}
+
+			if(BLK_SIZE(current) >= LIST_MAX_SIZE(i) || BLK_SIZE(current) < LIST_MAX_SIZE(i-1))
+			{
+				printf("Block %#x is in the wrong free list.\n", current)
+			}
+		}
+
+
+	}
 	blkp = mem_heap_lo();
 	while(blkp < mem_heap_hi()+1)
 	{
