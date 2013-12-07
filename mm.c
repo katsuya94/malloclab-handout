@@ -18,7 +18,7 @@
  * The root flag is used to prevent modifying bookkeeping information.
  * The root block is the block at the bottom of the heap.
  *
- * The first free list accommodates block sizes up to twice MIN_BLK_SIZE.
+ * The first free list accommodates block sizes up to but not equal to twice MIN_BLK_SIZE.
  * This pattern continues until LIST_MAX_SIZE(n) surpasses the limit of size_t.
  *
  * The free list root blocks are accessed rith the ROOT(n) macro.
@@ -71,7 +71,7 @@ team_t team = {
  * When VERBOSE is defined, every mm_malloc and mm_free call prints its calling conditions.
  *     Additionally, every call to mm_check will print the contents of the heap and free lists.
  */
-//#define MM_CHECK
+#define MM_CHECK
 //#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
@@ -200,7 +200,7 @@ void *mm_malloc(size_t size)
 void mm_free(void *payload)
 {
 #ifdef VERBOSE
-	printf("\nmm_free(%#08x)\n", ptr);
+	printf("\nmm_free(%#08x)\n", payload);
 #endif
 
 	void *blkp = BLOCKP(payload);
@@ -283,7 +283,7 @@ static void *mm_findSpace(size_t newsize)
 	void *returnval = NULL;
 
 	// Calculates and saves the first free list that should fit newsize
-	for(i; LIST_MAX_SIZE(i) < newsize; i++);
+	for(i; LIST_MAX_SIZE(i) <= newsize; i++);
 	int first = i;
 
 	for(i; i < NUM_LISTS; i++)
@@ -351,7 +351,7 @@ static void *mm_traverse(size_t newsize, void *root)
 static void mm_putList(void *ptr)
 {
 	int i = 0;
-	for(i; LIST_MAX_SIZE(i) < BLK_SIZE(ptr); i++);
+	for(i; LIST_MAX_SIZE(i) <= BLK_SIZE(ptr); i++);
 	mm_insert(ROOT(i), ptr);
 }
 
@@ -405,26 +405,30 @@ static int mm_check(void)
 		printf("%#08x 0x%x NEXT=0x%08x PREV=0x%08x size=%#x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), PREV(blkp), BLK_SIZE(blkp));
 	mm_printLists();
 #endif
-	
+	int i;
 	for(i = 0; i < NUM_LISTS; i++) //This will check through all of the free lists for various problems
 	{
-		current = ROOT(i);
-		while(NEXT(current) != NULL)
+		current = NEXT(ROOT(i));
+		while(current != NULL)
 		{
 			if (current < mem_heap_lo() || current > mem_heap_hi())
 			{
 				printf("Block %#x does not point to a valid address.\n", current);
+				return 0;
 			}
 
-			if(BLK_ALLOC(current) == 0x1)
+			if(BLK_ALLOC(current) != 0x0)
 			{
 				printf("Block %#x is in a free list but is not free.\n", current);
+				return 0;
 			}
 
-			if(BLK_SIZE(current) >= LIST_MAX_SIZE(i) || BLK_SIZE(current) < LIST_MAX_SIZE(i-1))
+			if(BLK_SIZE(current) >= LIST_MAX_SIZE(i) || BLK_SIZE(current) < (LIST_MAX_SIZE(i) >> 1))
 			{
-				printf("Block %#x is in the wrong free list.\n", current)
+				printf("Block %#x is in the wrong free list.\n", current);
+				return 0;
 			}
+			current = NEXT(current);
 		}
 
 
@@ -461,8 +465,8 @@ static void mm_printLists(void) {
 			void* blkp = ROOT(i);
 			while(blkp != NULL)
 			{
-					printf("\t%#08x 0x%x NEXT=0x%08x size=0x%x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), BLK_SIZE(blkp));
-					blkp = NEXT(blkp);
+				printf("\t%#08x 0x%x NEXT=0x%08x size=0x%x\n", blkp, BLK_ALLOC(blkp), NEXT(blkp), BLK_SIZE(blkp));
+				blkp = NEXT(blkp);
 			}
 		}
 	}
