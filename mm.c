@@ -71,7 +71,7 @@ team_t team = {
  * When VERBOSE is defined, every mm_malloc and mm_free call prints its calling conditions.
  *     Additionally, every call to mm_check will print the contents of the heap and free lists.
  */
-#define MM_CHECK
+//#define MM_CHECK
 //#define VERBOSE
 
 /* single word (4) or double word (8) alignment */
